@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { getSiteURL } from "@/lib/site-url";
+import { getCallbackURL } from "@/lib/site-url";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -26,8 +26,9 @@ export default function SignupPage() {
       password,
       options: {
         // 確認メールのリンクから戻ってくる先。必ず「絶対URL」を渡すこと。
-        // 相対パスを渡すと "Invalid path specified in request URL" になる。
-        emailRedirectTo: `${getSiteURL()}/auth/callback`,
+        // 相対パスやパス二重化を渡すと "Invalid path specified in request URL" になる。
+        // getCallbackURL() が常に「オリジン + /auth/callback」の絶対URLを保証する。
+        emailRedirectTo: getCallbackURL(),
       },
     });
 
