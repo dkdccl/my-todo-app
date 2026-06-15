@@ -14,11 +14,21 @@ export default function SignupPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // 【デバッグ】signUp() に実際に渡している emailRedirectTo の値と、
+  // Supabase クライアントが使う base URL。画面とコンソールの両方に出して、
+  // "Invalid path specified in request URL" の発生箇所を確定させる。
+  const emailRedirectTo = getCallbackURL();
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "(未設定)";
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
     setMessage(null);
+
+    // 送信前に実値をコンソールへ。DevTools → Console で確認できる。
+    console.log("[signup] emailRedirectTo =", emailRedirectTo);
+    console.log("[signup] NEXT_PUBLIC_SUPABASE_URL =", supabaseUrl);
 
     const supabase = createClient();
     const { data, error } = await supabase.auth.signUp({
@@ -26,14 +36,25 @@ export default function SignupPage() {
       password,
       options: {
         // 確認メールのリンクから戻ってくる先。必ず「絶対URL」を渡すこと。
-        // 相対パスやパス二重化を渡すと "Invalid path specified in request URL" になる。
-        // getCallbackURL() が常に「オリジン + /auth/callback」の絶対URLを保証する。
-        emailRedirectTo: getCallbackURL(),
+        emailRedirectTo,
       },
     });
 
     if (error) {
-      setError(error.message);
+      // エラーの全情報（message / name / status）をコンソールに出す。
+      // これで「どこが Invalid path を返しているか」が一発で分かる。
+      console.error("[signup] signUp error =", {
+        message: error.message,
+        name: error.name,
+        status: (error as { status?: number }).status,
+        full: error,
+      });
+      setError(
+        `${error.message}` +
+          ((error as { status?: number }).status
+            ? `（status=${(error as { status?: number }).status}）`
+            : "")
+      );
       setLoading(false);
       return;
     }
@@ -117,6 +138,15 @@ export default function SignupPage() {
             {loading ? "登録中..." : "登録する"}
           </button>
         </form>
+
+        {/* 【デバッグ】signUp() に渡している実値を画面に表示。原因特定後に削除する。 */}
+        <div className="mt-4 break-all rounded-lg border border-zinc-700 bg-zinc-950 p-3 text-xs text-zinc-400">
+          <p className="mb-1 font-medium text-zinc-300">デバッグ情報</p>
+          <p>emailRedirectTo:</p>
+          <p className="text-amber-400">{emailRedirectTo}</p>
+          <p className="mt-1">supabaseUrl:</p>
+          <p className="text-amber-400">{supabaseUrl}</p>
+        </div>
 
         <p className="mt-6 text-center text-sm text-zinc-400">
           すでにアカウントをお持ちの方は{" "}
