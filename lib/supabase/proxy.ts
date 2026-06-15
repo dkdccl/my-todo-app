@@ -38,7 +38,10 @@ export async function updateSession(request: NextRequest) {
   // 公開ページ（未ログインでもアクセス可）。
   // 認証ページに加え、既存のデモページもログイン不要のままにしておく。
   const publicPaths = ["/about", "/contact"];
-  const isPublic = isAuthPage || publicPaths.includes(pathname);
+  // /auth/* はメール確認のコールバック。未ログイン状態で踏むため必ず公開にする
+  // （ここを保護すると code 交換前に /login へ飛ばされて確認が完了しない）。
+  const isAuthCallback = pathname.startsWith("/auth");
+  const isPublic = isAuthPage || isAuthCallback || publicPaths.includes(pathname);
 
   // 未ログインで保護ページ（/ など）にアクセス → /login へ
   if (!user && !isPublic) {

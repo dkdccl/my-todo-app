@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { getSiteURL } from "@/lib/site-url";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -23,6 +24,11 @@ export default function SignupPage() {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        // 確認メールのリンクから戻ってくる先。必ず「絶対URL」を渡すこと。
+        // 相対パスを渡すと "Invalid path specified in request URL" になる。
+        emailRedirectTo: `${getSiteURL()}/auth/callback`,
+      },
     });
 
     if (error) {
