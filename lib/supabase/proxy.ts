@@ -1,0 +1,59 @@
+import { createServerClient } from "@supabase/ssr";
+import { NextResponse, type NextRequest } from "next/server";
+
+// proxy（旧 middleware）からセッションを更新し、認証状態に応じてリダイレクトする
+export async function updateSession(request: NextRequest) {
+  let supabaseResponse = NextResponse.next({ request });
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) =>
+            request.cookies.set(name, value)
+          );
+          supabaseResponse = NextResponse.next({ request });
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, options)
+          );
+        },
+      },
+    }
+  );
+
+  // getUser() を呼ぶことでトークンが必要に応じてリフレッシュされる。
+  // getClaims/getSession ではなく getUser を使うのが推奨。
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { pathname } = request.nextUrl;
+  const isAuthPage = pathname === "/login" || pathname === "/signup";
+
+  // 公開ページ（未ログインでもアクセス可）。
+  // 認証ページに加え、既存のデモページもログイン不要のままにしておく。
+  const publicPaths = ["/about", "/contact"];
+  const isPublic = isAuthPage || publicPaths.includes(pathname);
+
+  // 未ログインで保護ページ（/ など）にアクセス → /login へ
+  if (!user && !isPublic) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    return NextResponse.redirect(url);
+  }
+
+  // ログイン済みで /login・/signup にアクセス → / へ
+  if (user && isAuthPage) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/";
+    return NextResponse.redirect(url);
+  }
+
+  // 重要: supabaseResponse をそのまま返すこと（Cookie の同期を保つため）
+  return supabaseResponse;
+}
