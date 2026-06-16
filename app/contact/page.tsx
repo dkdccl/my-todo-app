@@ -4,10 +4,43 @@ import { useState } from "react";
 
 export default function ContactPage() {
   const [submitted, setSubmitted] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setSubmitted(true);
+    setError(null);
+    setSending(true);
+
+    const formData = new FormData(e.currentTarget);
+    const payload = {
+      name: formData.get("name"),
+      email: formData.get("email"),
+      message: formData.get("message"),
+    };
+
+    try {
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        setError(data?.error ?? "送信に失敗しました。時間をおいてお試しください。");
+        return;
+      }
+
+      // 送信成功して初めて完了画面に切り替える。
+      setSubmitted(true);
+    } catch {
+      setError("ネットワークエラーが発生しました。接続を確認してください。");
+    } finally {
+      setSending(false);
+    }
   }
 
   return (
@@ -79,11 +112,18 @@ export default function ContactPage() {
               />
             </div>
 
+            {error && (
+              <p className="rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-400">
+                {error}
+              </p>
+            )}
+
             <button
               type="submit"
-              className="mt-2 flex h-12 items-center justify-center rounded-full bg-foreground px-5 font-medium text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc]"
+              disabled={sending}
+              className="mt-2 flex h-12 items-center justify-center rounded-full bg-foreground px-5 font-medium text-background transition-colors hover:bg-[#383838] disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-[#ccc]"
             >
-              送信する
+              {sending ? "送信中..." : "送信する"}
             </button>
           </form>
         )}
