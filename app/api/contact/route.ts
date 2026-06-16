@@ -70,6 +70,15 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // 受信値を確認（フォーム送信側 / パース側の文字化け切り分け用）。
+  // codepoints が U+5C71(山) U+7530(田)... のように見えれば受信は正常。
+  console.log("[contact] received name:", JSON.stringify(name));
+  console.log("[contact] received message:", JSON.stringify(message));
+  console.log(
+    "[contact] name codepoints:",
+    [...name].map((c) => "U+" + c.codePointAt(0)!.toString(16).toUpperCase()).join(" ")
+  );
+
   // 2) APIキーの確認（未設定なら 500 で明示）
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
@@ -108,11 +117,21 @@ export async function POST(request: NextRequest) {
 
   const subject = `【お問い合わせ】${name} さんより`;
 
+  // プレーンテキスト版（HTML 非対応クライアント向けのフォールバック）。
+  const text = [
+    `お名前: ${name}`,
+    `メールアドレス: ${email}`,
+    "",
+    "お問い合わせ内容:",
+    message,
+  ].join("\n");
+
   // Resend に渡す直前の値をサーバーログに出力（文字化け調査用 / Vercel Logs で確認可）。
   console.log("[contact] from:", FROM_EMAIL);
   console.log("[contact] to:", TO_EMAIL);
   console.log("[contact] subject:", subject);
   console.log("[contact] html:", html);
+  console.log("[contact] text:", text);
 
   const { data, error } = await resend.emails.send({
     from: FROM_EMAIL,
@@ -121,14 +140,7 @@ export async function POST(request: NextRequest) {
     replyTo: email,
     subject,
     html,
-    // プレーンテキスト版（HTML 非対応クライアント向けのフォールバック）。
-    text: [
-      `お名前: ${name}`,
-      `メールアドレス: ${email}`,
-      "",
-      "お問い合わせ内容:",
-      message,
-    ].join("\n"),
+    text,
   });
 
   if (error) {
