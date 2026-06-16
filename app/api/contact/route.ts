@@ -8,8 +8,13 @@ const TO_EMAIL = process.env.CONTACT_TO_EMAIL ?? "dkdccl@gmail.com";
 // 送信元アドレス。独自ドメインを Resend で検証したらそのアドレスに変える。
 // 未設定時は Resend のテスト用ドメイン onboarding@resend.dev を使う
 // （テストモードでは Resend アカウント所有者宛にのみ送信できる）。
+//
+// 重要: 表示名は ASCII のみにする。From ヘッダーに非ASCII（日本語）を生の
+// まま入れると、多くのメールクライアントがヘッダー全体を Latin-1 と誤認し、
+// 件名・送信者名・本文まで文字化けする。日本語の差出人名を使いたい場合は
+// 独自ドメインを検証したうえで MIME エンコードに対応した値を設定する。
 const FROM_EMAIL =
-  process.env.CONTACT_FROM_EMAIL ?? "お問い合わせ <onboarding@resend.dev>";
+  process.env.CONTACT_FROM_EMAIL ?? "Contact Form <onboarding@resend.dev>";
 
 type ContactPayload = {
   name?: unknown;
@@ -101,12 +106,20 @@ export async function POST(request: NextRequest) {
   </body>
 </html>`;
 
+  const subject = `【お問い合わせ】${name} さんより`;
+
+  // Resend に渡す直前の値をサーバーログに出力（文字化け調査用 / Vercel Logs で確認可）。
+  console.log("[contact] from:", FROM_EMAIL);
+  console.log("[contact] to:", TO_EMAIL);
+  console.log("[contact] subject:", subject);
+  console.log("[contact] html:", html);
+
   const { data, error } = await resend.emails.send({
     from: FROM_EMAIL,
     to: TO_EMAIL,
     // 返信するとフォーム入力者へ届くようにする。
     replyTo: email,
-    subject: `【お問い合わせ】${name} さんより`,
+    subject,
     html,
     // プレーンテキスト版（HTML 非対応クライアント向けのフォールバック）。
     text: [
