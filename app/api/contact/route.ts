@@ -26,6 +26,16 @@ function looksLikeEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
+// HTML メールに値を埋め込む前にエスケープ（タグ混入・崩れを防ぐ）。
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export async function POST(request: NextRequest) {
   // 1) ボディの取得とバリデーション
   let body: ContactPayload;
@@ -67,12 +77,38 @@ export async function POST(request: NextRequest) {
 
   // 3) Resend で送信
   const resend = new Resend(apiKey);
+
+  // 日本語の文字化け対策として、<meta charset="utf-8"> を持つ HTML メールを送る。
+  // 一部メールクライアントはプレーンテキストの文字コードを誤判定して化けるため、
+  // HTML を主とし、プレーンテキストはフォールバックとして併送する。
+  const safeName = escapeHtml(name);
+  const safeEmail = escapeHtml(email);
+  // メッセージ内の改行は HTML 上で <br> に変換して見た目を保つ。
+  const safeMessage = escapeHtml(message).replace(/\r?\n/g, "<br>");
+
+  const html = `<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body style="margin:0;padding:24px;font-family:'Hiragino Sans','Yu Gothic',Meiryo,sans-serif;color:#111;line-height:1.7;">
+    <h2 style="margin:0 0 16px;font-size:18px;">お問い合わせがありました</h2>
+    <p style="margin:0 0 8px;"><strong>お名前：</strong>${safeName}</p>
+    <p style="margin:0 0 8px;"><strong>メールアドレス：</strong>${safeEmail}</p>
+    <p style="margin:16px 0 4px;"><strong>お問い合わせ内容：</strong></p>
+    <p style="margin:0;white-space:pre-wrap;">${safeMessage}</p>
+  </body>
+</html>`;
+
   const { data, error } = await resend.emails.send({
     from: FROM_EMAIL,
     to: TO_EMAIL,
     // 返信するとフォーム入力者へ届くようにする。
     replyTo: email,
     subject: `【お問い合わせ】${name} さんより`,
+    html,
+    // プレーンテキスト版（HTML 非対応クライアント向けのフォールバック）。
     text: [
       `お名前: ${name}`,
       `メールアドレス: ${email}`,
